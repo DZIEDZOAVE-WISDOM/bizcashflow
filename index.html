@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizCashFlow — Smart Analytics for Ghanaian SMEs</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300D67E'/><text x='50' y='68' text-anchor='middle' font-size='55' font-weight='800' fill='%23000'>₵</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2300D67E'/%3E%3Ctext x='50' y='70' text-anchor='middle' font-size='55' font-weight='800' fill='%23000'%3EC%3C/text%3E%3C/svg%3E">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Segoe UI', -apple-system, sans-serif; background: #060A0D; }
@@ -12,10 +12,10 @@
 </head>
 <body>
   <div id="root"></div>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script type="text/babel">
+  <script type="text/babel" data-type="module">
     const { useState, useMemo, useEffect, useRef } = React;
 
 /* ── Theme ── */
@@ -1116,7 +1116,7 @@ function ProfileSetup(props) {
 }
 
 /* ── Main App ── */
-export default function App() {
+function App() {
   var allData = useMemo(generateData, []);
   var _auth = useState(false); var authed = _auth[0], setAuthed = _auth[1];
   var _profiled = useState(false); var profiled = _profiled[0], setProfiled = _profiled[1];
@@ -1552,7 +1552,7 @@ export default function App() {
 }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(App));
+    root.render(<App />);
   </script>
 </body>
 </html>
