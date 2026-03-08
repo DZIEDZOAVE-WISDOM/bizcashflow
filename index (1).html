@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizCashFlow — Smart Analytics for Ghanaian SMEs</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300D67E'/><text x='50' y='68' text-anchor='middle' font-size='55' font-weight='800' fill='%23000'>₵</text></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', -apple-system, sans-serif; background: #060A0D; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useMemo, useEffect, useRef } = React;
+
+/* ── Theme ── */
+const T = {
+  bg: "#060A0D",
+  surface: "#0C1218",
+  card: "#111921",
+  border: "#1C2734",
+  accent: "#00D67E",
+  accentDim: "#00A862",
+  accentGlow: "rgba(0,214,126,0.1)",
+  warn: "#FFB020",
+  danger: "#FF5C5C",
+  dangerGlow: "rgba(255,92,92,0.08)",
+  blue: "#4DA6FF",
+  blueGlow: "rgba(77,166,255,0.08)",
+  purple: "#A78BFA",
+  cyan: "#22D3EE",
+  pink: "#F472B6",
+  lime: "#A3E635",
+  text: "#E2EAF0",
+  textSec: "#8899AA",
+  textMuted: "#4A5A6A",
+  momo: "#FFCC00",
+  voda: "#E60000",
+};
+
+const CH_COL = {
+  "MTN MoMo": T.momo,
+  "Cash": T.accent,
+  "Vodafone Cash": T.voda,
+  "Bank Transfer": T.blue,
+  "POS/Card": T.purple,
+  "AirtelTigo Money": "#FF4444",
+  "Credit/Debt": T.warn,
+};
+
+function fmt(n) {
+  return "₵" + Math.abs(n).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtK(n) {
+  if (n >= 10000) return "₵" + (n / 1000).toFixed(0) + "k";
+  if (n >= 1000) return "₵" + (n / 1000).toFixed(1) + "k";
+  return fmt(n);
+}
+
+/* ── Data Generation ── */
+function generateData() {
+  var chs = Object.keys(CH_COL);
+  var expC = ["Stock/Inventory", "Rent", "Utilities", "Transport", "Salaries", "Airtime/Data", "Food", "Maintenance"];
+  var locs = ["Main Shop - Adum", "Branch - Kejetia", "Branch - Bantama"];
+  var staff = ["Kwame", "Ama", "Yaw", "Akosua", "Kofi", "Abena"];
+  var prods = ["Building Materials", "Provisions", "Electronics", "Phone Accessories", "Clothing", "Cosmetics", "Food Items"];
+  var ctypes = ["Walk-in", "Regular", "Wholesale", "Credit Customer", "Online Order"];
+  var debtNames = ["Kofi Mensah", "Ama Darko", "Yaw Boateng", "Akua Serwaa", "Kwesi Appiah", "Abena Pokua"];
+  var result = [];
+
+  for (var d = 0; d < 120; d++) {
+    var date = new Date(2025, 2, 7);
+    date.setDate(date.getDate() - d);
+    var dow = date.getDay();
+    var cnt = dow === 0 ? 4 : dow === 6 ? 11 : 6 + Math.floor(Math.random() * 5);
+    var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    for (var t = 0; t < cnt; t++) {
+      var isIncome = Math.random() < 0.63;
+      var isCredit = isIncome && Math.random() < 0.12;
+      var ch = isCredit ? "Credit/Debt" : chs[Math.floor(Math.random() * (isIncome ? 5 : 7))];
+      var cat = isIncome ? "Sales" : expC[Math.floor(Math.random() * expC.length)];
+      var amt = isIncome
+        ? (ch === "POS/Card" ? 300 + Math.random() * 2800 : ch === "Cash" ? 15 + Math.random() * 450 : 25 + Math.random() * 700)
+        : (cat === "Rent" ? 800 + Math.random() * 400 : cat === "Salaries" ? 500 + Math.random() * 800 : 15 + Math.random() * 250);
+      var fee = 0;
+      if (["MTN MoMo", "Vodafone Cash", "AirtelTigo Money"].indexOf(ch) >= 0) fee = +(amt * 0.01).toFixed(2);
+      else if (ch === "POS/Card") fee = +(amt * 0.015).toFixed(2);
+
+      result.push({
+        date: date.toISOString().split("T")[0],
+        day: dayNames[dow],
+        hour: 6 + Math.floor(Math.random() * 13),
+        type: isIncome ? "Income" : "Expense",
+        channel: ch,
+        category: cat,
+        amount: +amt.toFixed(2),
+        fee: fee,
+        location: locs[Math.floor(Math.random() * locs.length)],
+        salesperson: isIncome ? staff[Math.floor(Math.random() * staff.length)] : "",
+        productType: isIncome ? prods[Math.floor(Math.random() * prods.length)] : "",
+        customerType: isIncome ? ctypes[Math.floor(Math.random() * ctypes.length)] : "",
+        debtor: isCredit ? debtNames[Math.floor(Math.random() * debtNames.length)] : null,
+        dueDate: isCredit ? new Date(date.getTime() + (7 + Math.floor(Math.random() * 21)) * 86400000).toISOString().split("T")[0] : null,
+        paid: isCredit ? Math.random() < 0.4 : null,
+      });
+    }
+  }
+  return result;
+}
+
+/* ── Unknown Field Analysis ── */
+function analyzeUnknownFields(data) {
+  var known = ["date", "day", "hour", "type", "channel", "category", "amount", "fee", "debtor", "dueDate", "paid"];
+  var extra = ["location", "salesperson", "productType", "customerType"];
+  var results = [];
+
+  extra.forEach(function (field) {
+    var vals = data.map(function (d) { return d[field]; }).filter(function (v) { return v != null && v !== ""; });
+    if (vals.length === 0) return;
+    var uniq = [];
+    vals.forEach(function (v) { if (uniq.indexOf(v) < 0) uniq.push(v); });
+    var freq = {};
+    vals.forEach(function (v) { freq[v] = (freq[v] || 0) + 1; });
+
+    var revCorr = {};
+    var incData = data.filter(function (d) { return d.type === "Income" && d[field]; });
+    incData.forEach(function (d) {
+      if (!revCorr[d[field]]) revCorr[d[field]] = { total: 0, count: 0 };
+      revCorr[d[field]].total += d.amount;
+      revCorr[d[field]].count++;
+    });
+
+    var labels = { location: "Shop Location", salesperson: "Salesperson", productType: "Product Type", customerType: "Customer Type" };
+    results.push({
+      field: labels[field] || field,
+      fieldType: "categorical",
+      icon: "🏷️",
+      color: T.purple,
+      freq: freq,
+      revCorr: revCorr,
+    });
+  });
+  return results;
+}
+
+/* ── Forecast ── */
+function computeForecast(daily) {
+  if (daily.length < 7) return [];
+  var rec = daily.slice(-30);
+  var aI = rec.reduce(function (a, d) { return a + d.inc; }, 0) / rec.length;
+  var aE = rec.reduce(function (a, d) { return a + d.exp; }, 0) / rec.length;
+  var dn = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var da = {};
+  dn.forEach(function (d) {
+    var dd = rec.filter(function (r) { return new Date(r.date).getDay() === dn.indexOf(d); });
+    da[d] = dd.length > 0 ? dd.reduce(function (a, r) { return a + r.inc - r.exp; }, 0) / dd.length : aI - aE;
+  });
+  var bal = rec.reduce(function (a, d) { return a + d.inc - d.exp; }, 0);
+  var fc = [];
+  for (var i = 1; i <= 14; i++) {
+    var dt = new Date(2025, 2, 7);
+    dt.setDate(dt.getDate() + i);
+    var dy = dn[dt.getDay()];
+    var ns = 0.85 + Math.random() * 0.3;
+    var net = da[dy] * ns;
+    bal += net;
+    fc.push({ date: dt.toISOString().split("T")[0], day: dy, projected: +bal.toFixed(2), projInc: +(aI * ns).toFixed(2), projExp: +(aE * ns).toFixed(2) });
+  }
+  return fc;
+}
+
+/* ── Shared Components ── */
+function Pill(props) {
+  var active = props.active;
+  var color = props.color || T.accent;
+  return (
+    <button onClick={props.onClick} style={{
+      padding: "6px 14px", borderRadius: 20,
+      border: "1px solid " + (active ? color : T.border),
+      background: active ? color + "18" : "transparent",
+      color: active ? color : T.textMuted,
+      fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap"
+    }}>
+      {props.children}
+    </button>
+  );
+}
+
+function KPICard(props) {
+  return (
+    <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 140 }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>{props.label}</span>
+        <span>{props.icon}</span>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: props.color || T.text, margin: "6px 0", fontFamily: "'JetBrains Mono', monospace" }}>
+        {props.value}
+      </div>
+      {props.sub && (
+        <div style={{ fontSize: 11, color: props.trend > 0 ? T.accent : props.trend < 0 ? T.danger : T.textMuted }}>
+          {props.trend > 0 ? "↑ " : props.trend < 0 ? "↓ " : ""}{props.sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProgressRing(props) {
+  var pct = props.pct;
+  var size = props.size || 80;
+  var color = props.color || T.accent;
+  var r = size / 2 - 6;
+  var circ = 2 * Math.PI * r;
+  var cl = Math.min(Math.max(pct, 0), 100);
+  return (
+    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.border} strokeWidth={5} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={5}
+        strokeDasharray={circ} strokeDashoffset={circ * (1 - cl / 100)} strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+      <text x={size / 2} y={size / 2 + 5} textAnchor="middle" fill={T.text} fontSize={14} fontWeight={700}
+        style={{ transform: "rotate(90deg)", transformOrigin: "center" }}
+        fontFamily="'JetBrains Mono', monospace">{Math.round(cl)}%</text>
+    </svg>
+  );
+}
+
+function MiniDonut(props) {
+  var segments = props.segments;
+  var size = props.size || 120;
+  var total = segments.reduce(function (s, d) { return s + d.value; }, 0);
+  var cum = 0;
+  var r = size / 2;
+  var ir = r - 16;
+  return (
+    <svg width={size} height={size} viewBox={"0 0 " + size + " " + size}>
+      {segments.map(function (seg, i) {
+        var pct = seg.value / total;
+        var start = cum * 2 * Math.PI - Math.PI / 2;
+        cum += pct;
+        var end = cum * 2 * Math.PI - Math.PI / 2;
+        var la = pct > 0.5 ? 1 : 0;
+        return (
+          <path key={i}
+            d={"M " + r + " " + r + " L " + (r + ir * Math.cos(start)) + " " + (r + ir * Math.sin(start)) + " A " + ir + " " + ir + " 0 " + la + " 1 " + (r + ir * Math.cos(end)) + " " + (r + ir * Math.sin(end)) + " Z"}
+            fill={seg.color} opacity={0.85} />
+        );
+      })}
+      <circle cx={r} cy={r} r={ir - 12} fill={T.card} />
+      <text x={r} y={r + 4} textAnchor="middle" fill={T.text} fontSize={13} fontWeight={700}
+        fontFamily="'JetBrains Mono', monospace">{fmtK(total)}</text>
+    </svg>
+  );
+}
+
+function Heatmap(props) {
+  var data = props.data;
+  var days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  var hours = [];
+  for (var i = 6; i <= 18; i++) hours.push(i);
+  var vals = Object.values(data);
+  var max = vals.length > 0 ? Math.max.apply(null, vals) : 1;
+  if (max === 0) max = 1;
+
+  var cells = [];
+  cells.push({ key: "corner", type: "empty" });
+  hours.forEach(function (h) {
+    var label = h > 12 ? (h - 12) + "p" : h === 12 ? "12p" : h + "a";
+    cells.push({ key: "h" + h, type: "header", label: label });
+  });
+  days.forEach(function (day) {
+    cells.push({ key: "d" + day, type: "day", label: day });
+    hours.forEach(function (h) {
+      var val = data[day + "-" + h] || 0;
+      cells.push({ key: day + "-" + h, type: "cell", val: val, intensity: val / max });
+    });
+  });
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "40px repeat(" + hours.length + ", 1fr)", gap: 2, fontSize: 10 }}>
+      {cells.map(function (c) {
+        if (c.type === "empty") return <div key={c.key} />;
+        if (c.type === "header") return <div key={c.key} style={{ textAlign: "center", color: T.textMuted, fontSize: 9 }}>{c.label}</div>;
+        if (c.type === "day") return <div key={c.key} style={{ color: T.textMuted, display: "flex", alignItems: "center", fontSize: 10 }}>{c.label}</div>;
+        return (
+          <div key={c.key}
+            title={c.key + ": " + fmt(c.val)}
+            style={{
+              background: c.val > 0 ? "rgba(0,214,126," + (0.08 + c.intensity * 0.82) + ")" : "rgba(255,255,255,0.015)",
+              borderRadius: 2, height: 20, cursor: "pointer"
+            }} />
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Schema Mapper ── */
+function SchemaMapper(props) {
+  var columns = props.columns;
+  var onConfirm = props.onConfirm;
+  var fields = ["Date", "Amount", "Transaction Type", "Payment Channel", "Category", "Description", "Fee", "Customer Name", "Reference", "— Unknown (auto-analyze) —", "— Skip —"];
+
+  function detect(c) {
+    var l = c.toLowerCase();
+    if (l.indexOf("date") >= 0 || l.indexOf("deti") >= 0) return "Date";
+    if (l.indexOf("amount") >= 0 || l.indexOf("sika") >= 0 || l.indexOf("price") >= 0 || l.indexOf("total") >= 0 || l.indexOf("ghs") >= 0) return "Amount";
+    if (l.indexOf("type") >= 0 || l.indexOf("in/out") >= 0) return "Transaction Type";
+    if (l.indexOf("channel") >= 0 || l.indexOf("payment") >= 0 || l.indexOf("method") >= 0) return "Payment Channel";
+    if (l.indexOf("categ") >= 0 || l.indexOf("purpose") >= 0) return "Category";
+    if (l.indexOf("desc") >= 0 || l.indexOf("note") >= 0) return "Description";
+    if (l.indexOf("fee") >= 0 || l.indexOf("charge") >= 0) return "Fee";
+    if (l.indexOf("customer") >= 0 || l.indexOf("vendor") >= 0) return "Customer Name";
+    if (l.indexOf("ref") >= 0) return "Reference";
+    return "— Unknown (auto-analyze) —";
+  }
+
+  var initMap = {};
+  columns.forEach(function (c) { initMap[c] = detect(c); });
+  var _ms = useState(initMap);
+  var mapping = _ms[0];
+  var setMapping = _ms[1];
+
+  var unkCount = Object.values(mapping).filter(function (v) { return v === "— Unknown (auto-analyze) —"; }).length;
+
+  return (
+    <div style={{ maxWidth: 620, margin: "0 auto", padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+        <span style={{ fontSize: 22 }}>🧠</span>
+        <h3 style={{ margin: 0, fontSize: 16, color: T.text }}>Smart Column Mapping</h3>
+      </div>
+      <p style={{ fontSize: 12, color: T.textMuted, margin: "0 0 20px", lineHeight: 1.6 }}>
+        We auto-detected your columns. Unrecognized fields marked for <strong style={{ color: T.purple }}>auto-analysis</strong>.
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 20px 1fr", gap: "8px 12px", alignItems: "center" }}>
+        <div style={{ fontSize: 10, textTransform: "uppercase", color: T.textMuted }}>Your Column</div>
+        <div />
+        <div style={{ fontSize: 10, textTransform: "uppercase", color: T.textMuted }}>Maps To</div>
+        {columns.map(function (col) {
+          var isU = mapping[col] === "— Unknown (auto-analyze) —";
+          var isK = !isU && mapping[col] !== "— Skip —";
+          return [
+            <div key={col + "l"} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.surface, borderRadius: 8, border: "1px solid " + (isU ? T.purple + "50" : T.border) }}>
+              <div style={{ width: 7, height: 7, borderRadius: 4, background: isK ? T.accent : isU ? T.purple : T.textMuted }} />
+              <span style={{ fontSize: 12, color: T.text, fontFamily: "'JetBrains Mono', monospace" }}>{col}</span>
+            </div>,
+            <div key={col + "a"} style={{ color: T.textMuted, textAlign: "center" }}>→</div>,
+            <select key={col + "s"} value={mapping[col]}
+              onChange={function (e) { var m = Object.assign({}, mapping); m[col] = e.target.value; setMapping(m); }}
+              style={{ padding: "8px 12px", background: isU ? T.purple + "12" : T.surface, border: "1px solid " + (isU ? T.purple + "50" : T.border), borderRadius: 8, color: isU ? T.purple : T.text, fontSize: 12, cursor: "pointer", outline: "none" }}>
+              {fields.map(function (f) { return <option key={f} value={f} style={{ background: T.card }}>{f}</option>; })}
+            </select>
+          ];
+        })}
+      </div>
+      {unkCount > 0 && (
+        <div style={{ marginTop: 16, padding: "12px 16px", background: T.purple + "12", border: "1px solid " + T.purple + "30", borderRadius: 10, fontSize: 12, color: T.purple }}>
+          🔮 <strong>{unkCount} unknown field{unkCount > 1 ? "s" : ""}</strong> will be auto-analyzed.
+        </div>
+      )}
+      <button onClick={function () { onConfirm(mapping); }} style={{ marginTop: 16, padding: "12px", background: "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", border: "none", borderRadius: 10, color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer", width: "100%" }}>
+        Confirm Columns → Review Data Quality
+      </button>
+    </div>
+  );
+}
+
+/* ── Data Cleaner ── */
+function DataCleaner(props) {
+  var onCleanComplete = props.onCleanComplete;
+  var _sc = useState(true);
+  var scanning = _sc[0], setScanning = _sc[1];
+  var _is = useState([]);
+  var issues = _is[0], setIssues = _is[1];
+  var _fx = useState(null);
+  var fixing = _fx[0], setFixing = _fx[1];
+
+  useEffect(function () {
+    var timer = setTimeout(function () {
+      setScanning(false);
+      setIssues([
+        { id: 1, sev: "high", field: "Amount", title: "12 missing amounts", detail: "Rows without amounts can't be analyzed.", sug: "Remove incomplete rows.", act: "Remove 12 rows", ok: false, done: false },
+        { id: 2, sev: "high", field: "Date", title: "3 date formats mixed", detail: "'YYYY-MM-DD' (658), 'DD/MM/YYYY' (43), 'Month D, YYYY' (8).", sug: "Standardize to YYYY-MM-DD.", act: "Convert 51 dates", ok: false, done: false },
+        { id: 3, sev: "medium", field: "Channel", title: "Inconsistent channel names", detail: "'MTN MoMo' vs 'Mtn Momo' vs 'momo'.", sug: "Merge into standard names.", act: "Fix 51 names", ok: false, done: false },
+        { id: 4, sev: "medium", field: "Amount", title: "4 outlier amounts", detail: "₵45,000 and ₵-250 far outside normal range.", sug: "Flag for manual review.", act: "Flag 4 outliers", ok: false, done: false },
+        { id: 5, sev: "low", field: "Tx Type", title: "Inconsistent labels", detail: "'Income' vs 'income' vs 'IN'.", sug: "Map all to standard.", act: "Fix 26 labels", ok: false, done: false },
+        { id: 6, sev: "low", field: "Fee", title: "234 missing fees", detail: "18 MoMo transactions should have fees.", sug: "Estimate MoMo at 1%.", act: "Fill 234 fees", ok: false, done: false },
+      ]);
+    }, 2000);
+    return function () { clearTimeout(timer); };
+  }, []);
+
+  function toggle(id) { setIssues(function (p) { return p.map(function (i) { return i.id === id ? Object.assign({}, i, { ok: !i.ok }) : i; }); }); }
+  function acceptAll() { setIssues(function (p) { return p.map(function (i) { return Object.assign({}, i, { ok: true }); }); }); }
+
+  var accepted = issues.filter(function (i) { return i.ok; });
+
+  function apply() {
+    if (accepted.length === 0) { onCleanComplete(); return; }
+    setFixing(0);
+    accepted.forEach(function (issue, idx) {
+      setTimeout(function () {
+        setFixing(idx);
+        setIssues(function (p) { return p.map(function (x) { return x.id === issue.id ? Object.assign({}, x, { done: true }) : x; }); });
+      }, idx * 400);
+    });
+    setTimeout(function () { setFixing(null); setTimeout(onCleanComplete, 500); }, accepted.length * 400 + 300);
+  }
+
+  var SC = { high: { c: T.danger, l: "High" }, medium: { c: T.warn, l: "Medium" }, low: { c: T.blue, l: "Low" } };
+
+  return (
+    <div style={{ maxWidth: 680, margin: "0 auto", padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: T.warn + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🧹</div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18, color: T.text }}>Data Quality Check</h3>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: T.textMuted }}>Issues found — fix before analysis.</p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", margin: "0 0 20px", padding: "14px 20px", background: T.card, borderRadius: 12, border: "1px solid " + T.border }}>
+        {[{ l: "Connect", d: true }, { l: "Map Columns", d: true }, { l: "Clean Data", a: true }, { l: "Analyze", d: false }].map(function (st, i) {
+          return (
+            <div key={st.l} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ width: 32, height: 32, borderRadius: 16, background: st.d ? T.accent + "20" : st.a ? T.warn + "20" : T.surface, border: "2px solid " + (st.d ? T.accent : st.a ? T.warn : T.border), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>
+                {st.d ? "✓" : i + 1}
+              </div>
+              <span style={{ fontSize: 10, color: st.d ? T.accent : st.a ? T.warn : T.textMuted, marginTop: 4 }}>{st.l}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {scanning ? (
+        <div style={{ textAlign: "center", padding: 50, background: T.card, borderRadius: 14, border: "1px solid " + T.border }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <div style={{ fontSize: 15, color: T.text }}>Scanning your data...</div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            {Object.entries(SC).map(function (entry) {
+              var k = entry[0], v = entry[1];
+              var cnt = issues.filter(function (i) { return i.sev === k; }).length;
+              return <div key={k} style={{ padding: "8px 14px", background: v.c + "12", borderRadius: 8, fontSize: 12, color: v.c }}>{v.l}: {cnt}</div>;
+            })}
+            <button onClick={acceptAll} style={{ marginLeft: "auto", padding: "8px 16px", background: T.accent + "15", border: "1px solid " + T.accent + "30", borderRadius: 8, color: T.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Accept All</button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {issues.map(function (issue) {
+              var sv = SC[issue.sev];
+              return (
+                <div key={issue.id} style={{ background: issue.done ? T.accent + "08" : T.card, border: "1px solid " + (issue.done ? T.accent + "30" : issue.ok ? sv.c + "30" : T.border), borderRadius: 12, padding: 14, opacity: issue.done ? 0.7 : 1 }}>
+                  <div style={{ display: "flex", alignItems: "start", gap: 12 }}>
+                    <div onClick={function () { if (!issue.done) toggle(issue.id); }}
+                      style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, border: "2px solid " + (issue.done ? T.accent : issue.ok ? sv.c : T.border), background: (issue.ok || issue.done) ? (issue.done ? T.accent : sv.c) + "15" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: issue.done ? "default" : "pointer" }}>
+                      {(issue.ok || issue.done) && <span style={{ fontSize: 12, color: issue.done ? T.accent : sv.c }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: issue.done ? T.accent : T.text }}>{issue.title}</span>
+                        <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: sv.c + "15", color: sv.c, fontWeight: 600 }}>{sv.l}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textSec, lineHeight: 1.5, marginBottom: 4 }}>{issue.detail}</div>
+                      <div style={{ padding: "5px 10px", background: T.surface, borderRadius: 6, fontSize: 11, color: T.accent }}>💡 {issue.sug}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <button onClick={apply} disabled={fixing !== null} style={{ marginTop: 16, width: "100%", padding: 14, background: fixing !== null ? T.border : "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", border: "none", borderRadius: 10, color: fixing !== null ? T.textMuted : "#000", fontSize: 14, fontWeight: 700, cursor: fixing !== null ? "wait" : "pointer" }}>
+            {fixing !== null ? "⏳ Fixing..." : accepted.length > 0 ? "Apply " + accepted.length + " Fixes & Analyze" : "Skip & Analyze"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Data Sources ── */
+function DataSources(props) {
+  var onConnect = props.onConnect;
+  var _sel = useState(null); var sel = _sel[0], setSel = _sel[1];
+  var _upl = useState(false); var upl = _upl[0], setUpl = _upl[1];
+  var _step = useState("pick"); var step = _step[0], setStep = _step[1];
+  var _cols = useState([]); var cols = _cols[0], setCols = _cols[1];
+  var _gs = useState(""); var gsUrl = _gs[0], setGsUrl = _gs[1];
+  var _dbHost = useState(""); var dbHost = _dbHost[0], setDbHost = _dbHost[1];
+  var _dbPort = useState("5432"); var dbPort = _dbPort[0], setDbPort = _dbPort[1];
+  var _dbName = useState(""); var dbName = _dbName[0], setDbName = _dbName[1];
+  var _dbUser = useState(""); var dbUser = _dbUser[0], setDbUser = _dbUser[1];
+  var _dbPass = useState(""); var dbPass = _dbPass[0], setDbPass = _dbPass[1];
+  var _selApi = useState(null); var selApi = _selApi[0], setSelApi = _selApi[1];
+
+  function go(type) {
+    setUpl(true);
+    setTimeout(function () {
+      setUpl(false);
+      if (type === "sheets") setCols(["Date", "Sika (GHS)", "Mo ne sen", "Payment Way", "What For", "Notes", "Shop Location", "Who Sold It", "Product", "Customer Type"]);
+      else if (type === "excel") setCols(["Deti", "Amount", "In or Out", "Cash/MoMo/Bank", "Category", "Description", "Branch", "Salesperson Name", "Item Type"]);
+      else if (type === "db") setCols(["transaction_date", "total_amount", "tx_type", "payment_method", "category_id", "narration", "service_fee", "store_branch", "product_category"]);
+      else setCols(["TransactionDate", "Amount", "TransactionType", "Channel", "Description", "Fee", "RecipientName", "TransactionId"]);
+      setStep("map");
+    }, 1800);
+  }
+
+  if (step === "map") return <SchemaMapper columns={cols} onConfirm={function () { setStep("clean"); }} />;
+  if (step === "clean") return <DataCleaner onCleanComplete={onConnect} />;
+
+  var srcs = [
+    { id: "sheets", icon: "📊", l: "Google Sheets", d: "Auto-sync as you type", c: "#34A853" },
+    { id: "excel", icon: "📁", l: "Excel / CSV Upload", d: "Any spreadsheet", c: T.accent },
+    { id: "db", icon: "🗄️", l: "SQL Database", d: "PostgreSQL, MySQL", c: T.blue },
+    { id: "api", icon: "💳", l: "Hubtel / Paystack / MoMo", d: "Payment APIs", c: T.purple },
+  ];
+
+  return (
+    <div style={{ maxWidth: 620, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🔌</div>
+        <h2 style={{ margin: 0, fontSize: 22, color: T.text }}>Connect Your Data</h2>
+        <p style={{ color: T.textMuted, fontSize: 13, marginTop: 6 }}>Any format. Any columns. Even Twi.</p>
+      </div>
+      <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
+        {srcs.map(function (s) {
+          return (
+            <button key={s.id} onClick={function () { setSel(s.id); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", background: sel === s.id ? s.c + "0C" : T.card, border: "1.5px solid " + (sel === s.id ? s.c : T.border), borderRadius: 14, cursor: "pointer", textAlign: "left", width: "100%" }}>
+              <div style={{ fontSize: 26, width: 44, height: 44, borderRadius: 10, background: s.c + "14", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{s.l}</div>
+                <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{s.d}</div>
+              </div>
+              {sel === s.id && <div style={{ width: 8, height: 8, borderRadius: 4, background: s.c }} />}
+            </button>
+          );
+        })}
+      </div>
+
+      {sel === "sheets" && (
+        <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 13, color: T.textSec, marginBottom: 12 }}>Paste your Google Sheets URL</div>
+          <input value={gsUrl} onChange={function (e) { setGsUrl(e.target.value); }} placeholder="https://docs.google.com/spreadsheets/d/..."
+            style={{ width: "100%", padding: 12, background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+          <button onClick={function () { go("sheets"); }} disabled={upl}
+            style={{ marginTop: 14, padding: 11, background: upl ? T.border : "#34A853", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, cursor: upl ? "wait" : "pointer", width: "100%" }}>
+            {upl ? "⏳ Connecting..." : "Connect Google Sheet"}
+          </button>
+        </div>
+      )}
+
+      {sel === "excel" && (
+        <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20 }}>
+          {upl ? (
+            <div style={{ textAlign: "center", padding: 30 }}>
+              <div style={{ fontSize: 36 }}>⏳</div>
+              <div style={{ color: T.accent, marginTop: 8 }}>Reading file...</div>
+            </div>
+          ) : (
+            <div onClick={function () { go("excel"); }} style={{ border: "2px dashed " + T.border, borderRadius: 12, padding: "40px 20px", textAlign: "center", cursor: "pointer" }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>📂</div>
+              <div style={{ color: T.text, fontSize: 14, fontWeight: 500 }}>Click to upload</div>
+              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 6 }}>.xlsx .xls .csv</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sel === "db" && (
+        <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 13, color: T.textSec, marginBottom: 14 }}>Enter your database connection details</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>Host</label>
+              <input value={dbHost} onChange={function (e) { setDbHost(e.target.value); }} placeholder="db.example.com"
+                style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>Port</label>
+              <input value={dbPort} onChange={function (e) { setDbPort(e.target.value); }} placeholder="5432"
+                style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>Database Name</label>
+              <input value={dbName} onChange={function (e) { setDbName(e.target.value); }} placeholder="my_shop_db"
+                style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>Username</label>
+              <input value={dbUser} onChange={function (e) { setDbUser(e.target.value); }} placeholder="readonly_user"
+                style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>Password</label>
+              <input type="password" value={dbPass} onChange={function (e) { setDbPass(e.target.value); }} placeholder="••••••••"
+                style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "8px 12px", background: T.blueGlow, borderRadius: 8 }}>
+            <span style={{ fontSize: 12 }}>🔒</span>
+            <span style={{ fontSize: 11, color: T.blue }}>Read-only access. Credentials encrypted and never stored in plain text.</span>
+          </div>
+          <button onClick={function () { go("db"); }} disabled={upl}
+            style={{ marginTop: 14, padding: 11, background: upl ? T.border : T.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, cursor: upl ? "wait" : "pointer", width: "100%" }}>
+            {upl ? "⏳ Connecting to database..." : "Test Connection & Import"}
+          </button>
+        </div>
+      )}
+
+      {sel === "api" && (
+        <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 13, color: T.textSec, marginBottom: 14 }}>Select a payment provider to connect</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            {[
+              { n: "Hubtel", icon: "💳", c: "#00B0FF" },
+              { n: "Paystack", icon: "💰", c: "#0BA4DB" },
+              { n: "Expresspay", icon: "⚡", c: T.warn },
+              { n: "MTN MoMo API", icon: "📱", c: T.momo },
+            ].map(function (api) {
+              return (
+                <button key={api.n} onClick={function () { setSelApi(api.n); }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, background: selApi === api.n ? api.c + "12" : T.surface, border: "1px solid " + (selApi === api.n ? api.c : T.border), borderRadius: 10, cursor: "pointer" }}>
+                  <span style={{ fontSize: 20 }}>{api.icon}</span>
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>{api.n}</div>
+                    <div style={{ fontSize: 10, color: selApi === api.n ? T.accent : T.textMuted }}>{selApi === api.n ? "Selected" : "Click to select"}</div>
+                  </div>
+                  {selApi === api.n && <div style={{ marginLeft: "auto", width: 7, height: 7, borderRadius: 4, background: api.c }} />}
+                </button>
+              );
+            })}
+          </div>
+          {selApi && (
+            <div>
+              <div>
+                <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>API Key / Merchant ID</label>
+                <input placeholder={"Enter your " + selApi + " API key"}
+                  style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box", marginBottom: 10 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: T.textMuted, display: "block", marginBottom: 4 }}>Secret Key</label>
+                <input type="password" placeholder="••••••••••••••"
+                  style={{ width: "100%", padding: "10px 12px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, padding: "8px 12px", background: T.purple + "12", borderRadius: 8 }}>
+                <span style={{ fontSize: 12 }}>🔒</span>
+                <span style={{ fontSize: 11, color: T.purple }}>API keys are encrypted and used only for read-only data access.</span>
+              </div>
+              <button onClick={function () { go("api"); }} disabled={upl}
+                style={{ marginTop: 14, padding: 11, background: upl ? T.border : T.purple, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, cursor: upl ? "wait" : "pointer", width: "100%" }}>
+                {upl ? "⏳ Connecting to API..." : "Connect " + selApi}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── AI Chat ── */
+function AIChat(props) {
+  var stats = props.stats;
+  var _ms = useState([{ r: "ai", t: "Hi! Ask me anything about your business data." }]);
+  var msgs = _ms[0], setMsgs = _ms[1];
+  var _inp = useState(""); var inp = _inp[0], setInp = _inp[1];
+  var _typ = useState(false); var typ = _typ[0], setTyp = _typ[1];
+  var endRef = useRef(null);
+
+  useEffect(function () { if (endRef.current) endRef.current.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
+
+  function respond(q) {
+    var l = q.toLowerCase();
+    if (l.indexOf("best") >= 0 || l.indexOf("perform") >= 0) return "Best day: " + stats.bestDay + " (" + fmtK(stats.bestDayRev) + "). Kwame is top salesperson at 40% above average.";
+    if (l.indexOf("expense") >= 0 || l.indexOf("spend") >= 0) return "Expenses are " + ((stats.tExp / stats.tInc) * 100).toFixed(0) + "% of income. Stock/Inventory is biggest at ~35%.";
+    if (l.indexOf("compar") >= 0 || l.indexOf("last") >= 0) return "Income " + (stats.incGr > 0 ? "up" : "down") + " " + Math.abs(stats.incGr).toFixed(1) + "% vs previous period.";
+    if (l.indexOf("channel") >= 0 || l.indexOf("fee") >= 0) return "MoMo ~35% of income. Fees cost " + fmtK(stats.tFee) + ". Bank transfer for large orders saves money.";
+    if (l.indexOf("debt") >= 0 || l.indexOf("owe") >= 0) return stats.debtCount + " outstanding debts worth " + fmtK(stats.debtTot) + ". " + stats.overdueCount + " overdue. Send reminders.";
+    return "Income: " + fmtK(stats.tInc) + ", Net: " + fmtK(stats.net) + ". Best day: " + stats.bestDay + ". Wholesale = 8% of transactions but ~30% of revenue.";
+  }
+
+  function send() {
+    if (!inp.trim()) return;
+    var q = inp;
+    setMsgs(function (p) { return p.concat([{ r: "user", t: q }]); });
+    setInp("");
+    setTyp(true);
+    setTimeout(function () {
+      setMsgs(function (p) { return p.concat([{ r: "ai", t: respond(q) }]); });
+      setTyp(false);
+    }, 1200);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: 480, background: T.card, borderRadius: 14, border: "1px solid " + T.border, overflow: "hidden" }}>
+      <div style={{ padding: "14px 18px", borderBottom: "1px solid " + T.border, display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 16, background: T.purple + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🧠</div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>AI Business Advisor</div>
+          <div style={{ fontSize: 10, color: T.accent }}>● Powered by Claude</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        {msgs.map(function (m, i) {
+          return (
+            <div key={i} style={{ display: "flex", justifyContent: m.r === "user" ? "flex-end" : "flex-start" }}>
+              <div style={{ maxWidth: "80%", padding: "10px 14px", borderRadius: 12, background: m.r === "user" ? T.accent + "20" : T.surface, border: "1px solid " + (m.r === "user" ? T.accent + "30" : T.border), color: T.text, fontSize: 12, lineHeight: 1.65 }}>
+                {m.t}
+              </div>
+            </div>
+          );
+        })}
+        {typ && <div style={{ display: "flex" }}><div style={{ padding: "10px 14px", background: T.surface, borderRadius: 12, border: "1px solid " + T.border, color: T.textMuted, fontSize: 12 }}>Analyzing...</div></div>}
+        <div ref={endRef} />
+      </div>
+      <div style={{ padding: 12, borderTop: "1px solid " + T.border, display: "flex", gap: 8 }}>
+        <input value={inp} onChange={function (e) { setInp(e.target.value); }} onKeyDown={function (e) { if (e.key === "Enter") send(); }}
+          placeholder="Ask about your data..."
+          style={{ flex: 1, padding: 10, background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 12, outline: "none" }} />
+        <button onClick={send} style={{ padding: "10px 18px", background: T.purple, border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Send</button>
+      </div>
+      <div style={{ padding: "6px 12px 10px", display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {["Best day?", "Channel fees?", "Who owes me?", "Forecast?"].map(function (q) {
+          return <button key={q} onClick={function () { setInp(q); }} style={{ padding: "4px 10px", background: T.surface, border: "1px solid " + T.border, borderRadius: 12, color: T.textMuted, fontSize: 10, cursor: "pointer" }}>{q}</button>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Discovery Card ── */
+function DiscoveryCard(props) {
+  var a = props.data;
+  var catCols = [T.accent, T.blue, T.purple, T.warn, T.cyan, T.pink, T.lime, T.danger];
+  var freqEntries = Object.entries(a.freq).sort(function (x, y) { return y[1] - x[1]; }).slice(0, 5);
+  var maxFreq = freqEntries.length > 0 ? freqEntries[0][1] : 1;
+
+  var revEntries = Object.entries(a.revCorr).sort(function (x, y) { return (y[1].total / y[1].count) - (x[1].total / x[1].count); });
+  var bestRev = revEntries.length > 0 ? revEntries[0] : null;
+
+  return (
+    <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: a.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{a.icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{a.field}</div>
+          <div style={{ fontSize: 11, color: T.textMuted }}>{Object.keys(a.freq).length} unique values</div>
+        </div>
+        <div style={{ padding: "4px 10px", borderRadius: 12, background: a.color + "18", color: a.color, fontSize: 10, fontWeight: 600, textTransform: "uppercase" }}>categorical</div>
+      </div>
+      {freqEntries.map(function (entry, i) {
+        var v = entry[0], c = entry[1];
+        return (
+          <div key={v} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 11, color: T.textSec, width: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v}</span>
+            <div style={{ flex: 1, height: 12, background: T.surface, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: (c / maxFreq * 100) + "%", background: catCols[i % catCols.length] + "70", borderRadius: 4 }} />
+            </div>
+            <span style={{ fontSize: 10, color: T.textMuted, width: 28, textAlign: "right" }}>{c}</span>
+          </div>
+        );
+      })}
+      {bestRev && (
+        <div style={{ marginTop: 8, padding: "8px 12px", background: T.accentGlow, borderRadius: 8, fontSize: 12, color: T.accent }}>
+          💡 <strong>{bestRev[0]}</strong> has highest avg revenue at {fmt(bestRev[1].total / bestRev[1].count)}/tx
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Auth & Business Profile ── */
+function AuthScreen(props) {
+  var onAuth = props.onAuth;
+  var _mode = useState("login"); var mode = _mode[0], setMode = _mode[1];
+  var _email = useState(""); var email = _email[0], setEmail = _email[1];
+  var _pass = useState(""); var pass = _pass[0], setPass = _pass[1];
+  var _name = useState(""); var name = _name[0], setName = _name[1];
+  var _phone = useState(""); var phone = _phone[0], setPhone = _phone[1];
+  var _loading = useState(false); var loading = _loading[0], setLoading = _loading[1];
+
+  function handleSubmit() {
+    setLoading(true);
+    setTimeout(function () {
+      setLoading(false);
+      if (mode === "login") {
+        onAuth({ email: email });
+      } else {
+        onAuth({ email: email, name: name, phone: phone, isNew: true });
+      }
+    }, 1200);
+  }
+
+  var inputStyle = { width: "100%", padding: "12px 14px", background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" };
+  var labelStyle = { fontSize: 12, color: T.textMuted, display: "block", marginBottom: 6 };
+
+  return (
+    <div style={{ background: T.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', -apple-system, sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 440, padding: "0 20px" }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, color: "#000", marginBottom: 16 }}>₵</div>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: T.text }}>BizCashFlow</h1>
+          <p style={{ margin: "8px 0 0", fontSize: 14, color: T.textMuted }}>Smart analytics for Ghanaian SMEs</p>
+        </div>
+
+        <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 16, padding: 28 }}>
+          <div style={{ display: "flex", marginBottom: 24, background: T.surface, borderRadius: 10, padding: 4 }}>
+            <button onClick={function () { setMode("login"); }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: mode === "login" ? T.accent + "20" : "transparent", color: mode === "login" ? T.accent : T.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sign In</button>
+            <button onClick={function () { setMode("signup"); }} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: mode === "signup" ? T.accent + "20" : "transparent", color: mode === "signup" ? T.accent : T.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create Account</button>
+          </div>
+
+          {mode === "signup" && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>Full Name</label>
+              <input value={name} onChange={function (e) { setName(e.target.value); }} placeholder="Kwame Asante"
+                style={inputStyle} />
+            </div>
+          )}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Email Address</label>
+            <input type="email" value={email} onChange={function (e) { setEmail(e.target.value); }} placeholder="kwame@example.com"
+              style={inputStyle} />
+          </div>
+
+          {mode === "signup" && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>Phone Number (WhatsApp)</label>
+              <input value={phone} onChange={function (e) { setPhone(e.target.value); }} placeholder="024 XXX XXXX"
+                style={inputStyle} />
+            </div>
+          )}
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={labelStyle}>Password</label>
+            <input type="password" value={pass} onChange={function (e) { setPass(e.target.value); }} placeholder={mode === "signup" ? "Create a strong password" : "Enter your password"}
+              style={inputStyle} />
+          </div>
+
+          <button onClick={handleSubmit} disabled={loading} style={{
+            width: "100%", padding: 14, background: loading ? T.border : "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")",
+            border: "none", borderRadius: 10, color: loading ? T.textMuted : "#000", fontSize: 15, fontWeight: 700, cursor: loading ? "wait" : "pointer"
+          }}>
+            {loading ? "⏳ Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
+          </button>
+
+          {mode === "login" && (
+            <div style={{ textAlign: "center", marginTop: 14 }}>
+              <span style={{ fontSize: 12, color: T.textMuted, cursor: "pointer" }}>Forgot password?</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <span style={{ fontSize: 12, color: T.textMuted }}>{mode === "login" ? "New to BizCashFlow? " : "Already have an account? "}</span>
+          <span onClick={function () { setMode(mode === "login" ? "signup" : "login"); }} style={{ fontSize: 12, color: T.accent, cursor: "pointer", fontWeight: 600 }}>{mode === "login" ? "Create an account" : "Sign in"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Business Profile Setup ── */
+function ProfileSetup(props) {
+  var onComplete = props.onComplete;
+  var _step = useState(1); var step = _step[0], setStep = _step[1];
+  var _bName = useState(""); var bName = _bName[0], setBName = _bName[1];
+  var _bType = useState(""); var bType = _bType[0], setBType = _bType[1];
+  var _bIndustry = useState(""); var bIndustry = _bIndustry[0], setBIndustry = _bIndustry[1];
+  var _bLocation = useState(""); var bLocation = _bLocation[0], setBLocation = _bLocation[1];
+  var _bCity = useState(""); var bCity = _bCity[0], setBCity = _bCity[1];
+  var _bSize = useState(""); var bSize = _bSize[0], setBSize = _bSize[1];
+  var _bAge = useState(""); var bAge = _bAge[0], setBAge = _bAge[1];
+  var _bChannels = useState([]); var bChannels = _bChannels[0], setBChannels = _bChannels[1];
+  var _bRevenue = useState(""); var bRevenue = _bRevenue[0], setBRevenue = _bRevenue[1];
+  var _bGoal = useState(""); var bGoal = _bGoal[0], setBGoal = _bGoal[1];
+  var _saving = useState(false); var saving = _saving[0], setSaving = _saving[1];
+
+  var inputStyle = { width: "100%", padding: "12px 14px", background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box" };
+  var labelStyle = { fontSize: 12, color: T.textMuted, display: "block", marginBottom: 6, marginTop: 16 };
+  var selectStyle = { width: "100%", padding: "12px 14px", background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.text, fontSize: 13, outline: "none", cursor: "pointer", boxSizing: "border-box" };
+
+  function toggleChannel(ch) {
+    if (bChannels.indexOf(ch) >= 0) {
+      setBChannels(bChannels.filter(function (c) { return c !== ch; }));
+    } else {
+      setBChannels(bChannels.concat([ch]));
+    }
+  }
+
+  function finish() {
+    setSaving(true);
+    setTimeout(function () {
+      setSaving(false);
+      onComplete({
+        businessName: bName, businessType: bType, industry: bIndustry,
+        location: bLocation, city: bCity, size: bSize, age: bAge,
+        channels: bChannels, monthlyRevenue: bRevenue, goal: bGoal
+      });
+    }, 1000);
+  }
+
+  var industries = [
+    "Provisions & Grocery", "Building Materials", "Electronics & Phone Accessories",
+    "Clothing & Fashion", "Cosmetics & Beauty", "Food & Beverages",
+    "Pharmacy & Health", "Fuel Station", "Auto Parts & Mechanics",
+    "Restaurant & Chop Bar", "Salon & Barbershop", "Hotel & Hospitality",
+    "Agriculture & Farming", "Transport & Logistics", "Education & Training",
+    "Professional Services", "E-commerce / Online Sales", "Manufacturing", "Other"
+  ];
+
+  var cities = [
+    "Kumasi", "Accra", "Takoradi", "Tamale", "Cape Coast", "Sunyani",
+    "Koforidua", "Ho", "Bolgatanga", "Wa", "Techiman", "Obuasi", "Other"
+  ];
+
+  var channels = [
+    { id: "momo", label: "MTN MoMo", icon: "📱", color: T.momo },
+    { id: "cash", label: "Cash", icon: "💵", color: T.accent },
+    { id: "voda", label: "Vodafone Cash", icon: "📱", color: "#E60000" },
+    { id: "bank", label: "Bank Transfer", icon: "🏦", color: T.blue },
+    { id: "pos", label: "POS / Card", icon: "💳", color: T.purple },
+    { id: "airtel", label: "AirtelTigo Money", icon: "📱", color: "#FF4444" },
+    { id: "credit", label: "Credit / On Account", icon: "📝", color: T.warn },
+    { id: "cheque", label: "Cheque", icon: "🧾", color: T.textSec },
+  ];
+
+  return (
+    <div style={{ background: T.bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', -apple-system, sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 520, padding: "0 20px" }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#000", marginBottom: 12 }}>₵</div>
+          <h2 style={{ margin: 0, fontSize: 22, color: T.text }}>Set Up Your Business Profile</h2>
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: T.textMuted }}>This helps us personalize your analytics and provide industry benchmarks.</p>
+        </div>
+
+        {/* Progress */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+          {[1, 2, 3].map(function (s) {
+            return (
+              <div key={s} style={{ flex: 1, height: 4, borderRadius: 2, background: s <= step ? T.accent : T.border, transition: "background 0.3s" }} />
+            );
+          })}
+        </div>
+
+        <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 16, padding: 28 }}>
+
+          {/* Step 1: Business Info */}
+          {step === 1 && (
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 4 }}>Business Information</div>
+              <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>Tell us about your business</div>
+
+              <label style={labelStyle}>Business Name</label>
+              <input value={bName} onChange={function (e) { setBName(e.target.value); }} placeholder="e.g. Kwame's Provisions Store" style={inputStyle} />
+
+              <label style={labelStyle}>Business Type</label>
+              <select value={bType} onChange={function (e) { setBType(e.target.value); }} style={selectStyle}>
+                <option value="" style={{ background: T.card }}>Select type...</option>
+                <option value="sole" style={{ background: T.card }}>Sole Proprietorship</option>
+                <option value="partnership" style={{ background: T.card }}>Partnership</option>
+                <option value="limited" style={{ background: T.card }}>Limited Company</option>
+                <option value="cooperative" style={{ background: T.card }}>Cooperative</option>
+                <option value="informal" style={{ background: T.card }}>Informal / Unregistered</option>
+              </select>
+
+              <label style={labelStyle}>Industry / Sector</label>
+              <select value={bIndustry} onChange={function (e) { setBIndustry(e.target.value); }} style={selectStyle}>
+                <option value="" style={{ background: T.card }}>Select industry...</option>
+                {industries.map(function (ind) { return <option key={ind} value={ind} style={{ background: T.card }}>{ind}</option>; })}
+              </select>
+
+              <label style={labelStyle}>City</label>
+              <select value={bCity} onChange={function (e) { setBCity(e.target.value); }} style={selectStyle}>
+                <option value="" style={{ background: T.card }}>Select city...</option>
+                {cities.map(function (c) { return <option key={c} value={c} style={{ background: T.card }}>{c}</option>; })}
+              </select>
+
+              <label style={labelStyle}>Business Location / Area</label>
+              <input value={bLocation} onChange={function (e) { setBLocation(e.target.value); }} placeholder="e.g. Adum, Kejetia Market, Osu Oxford Street" style={inputStyle} />
+
+              <button onClick={function () { setStep(2); }} style={{ width: "100%", padding: 14, background: "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", border: "none", borderRadius: 10, color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 24 }}>
+                Next: Business Details →
+              </button>
+            </div>
+          )}
+
+          {/* Step 2: Business Details */}
+          {step === 2 && (
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 4 }}>Business Details</div>
+              <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>Help us understand your business size and operations</div>
+
+              <label style={labelStyle}>Number of Employees</label>
+              <select value={bSize} onChange={function (e) { setBSize(e.target.value); }} style={selectStyle}>
+                <option value="" style={{ background: T.card }}>Select...</option>
+                <option value="1" style={{ background: T.card }}>Just me</option>
+                <option value="2-5" style={{ background: T.card }}>2-5 employees</option>
+                <option value="6-10" style={{ background: T.card }}>6-10 employees</option>
+                <option value="11-25" style={{ background: T.card }}>11-25 employees</option>
+                <option value="26-50" style={{ background: T.card }}>26-50 employees</option>
+                <option value="50+" style={{ background: T.card }}>50+ employees</option>
+              </select>
+
+              <label style={labelStyle}>How Long in Business</label>
+              <select value={bAge} onChange={function (e) { setBAge(e.target.value); }} style={selectStyle}>
+                <option value="" style={{ background: T.card }}>Select...</option>
+                <option value="<6m" style={{ background: T.card }}>Less than 6 months</option>
+                <option value="6m-1y" style={{ background: T.card }}>6 months - 1 year</option>
+                <option value="1-3y" style={{ background: T.card }}>1-3 years</option>
+                <option value="3-5y" style={{ background: T.card }}>3-5 years</option>
+                <option value="5-10y" style={{ background: T.card }}>5-10 years</option>
+                <option value="10y+" style={{ background: T.card }}>10+ years</option>
+              </select>
+
+              <label style={labelStyle}>Estimated Monthly Revenue (GHS)</label>
+              <select value={bRevenue} onChange={function (e) { setBRevenue(e.target.value); }} style={selectStyle}>
+                <option value="" style={{ background: T.card }}>Select range...</option>
+                <option value="<1k" style={{ background: T.card }}>Less than ₵1,000</option>
+                <option value="1k-5k" style={{ background: T.card }}>₵1,000 - ₵5,000</option>
+                <option value="5k-15k" style={{ background: T.card }}>₵5,000 - ₵15,000</option>
+                <option value="15k-50k" style={{ background: T.card }}>₵15,000 - ₵50,000</option>
+                <option value="50k-100k" style={{ background: T.card }}>₵50,000 - ₵100,000</option>
+                <option value="100k+" style={{ background: T.card }}>₵100,000+</option>
+              </select>
+
+              <label style={labelStyle}>Payment Channels You Accept</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+                {channels.map(function (ch) {
+                  var isSelected = bChannels.indexOf(ch.id) >= 0;
+                  return (
+                    <button key={ch.id} onClick={function () { toggleChannel(ch.id); }} style={{
+                      display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
+                      background: isSelected ? ch.color + "15" : T.surface,
+                      border: "1px solid " + (isSelected ? ch.color : T.border),
+                      borderRadius: 8, cursor: "pointer", textAlign: "left"
+                    }}>
+                      <span style={{ fontSize: 16 }}>{ch.icon}</span>
+                      <span style={{ fontSize: 12, color: isSelected ? T.text : T.textMuted }}>{ch.label}</span>
+                      {isSelected && <span style={{ marginLeft: "auto", fontSize: 10, color: ch.color }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                <button onClick={function () { setStep(1); }} style={{ flex: 1, padding: 14, background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.textSec, fontSize: 14, cursor: "pointer" }}>← Back</button>
+                <button onClick={function () { setStep(3); }} style={{ flex: 2, padding: 14, background: "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", border: "none", borderRadius: 10, color: "#000", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Next: Your Goals →</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Goals */}
+          {step === 3 && (
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 4 }}>What Do You Want to Achieve?</div>
+              <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>This helps us prioritize the insights that matter most to you</div>
+
+              <label style={labelStyle}>Primary Goal</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[
+                  { id: "visibility", icon: "📊", title: "See where my money goes", desc: "Understand income and expenses across all channels" },
+                  { id: "growth", icon: "📈", title: "Grow my revenue", desc: "Find opportunities to sell more and earn more" },
+                  { id: "cashflow", icon: "💰", title: "Manage cash flow better", desc: "Never run out of money for rent, stock, or payroll" },
+                  { id: "debts", icon: "💳", title: "Track who owes me", desc: "Stop losing money to untracked credit sales" },
+                  { id: "loans", icon: "🏦", title: "Qualify for a business loan", desc: "Build financial records to access formal credit" },
+                  { id: "tax", icon: "🏛️", title: "Prepare for taxes", desc: "Stay on top of GRA obligations and avoid surprises" },
+                ].map(function (g) {
+                  var isSelected = bGoal === g.id;
+                  return (
+                    <button key={g.id} onClick={function () { setBGoal(g.id); }} style={{
+                      display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+                      background: isSelected ? T.accent + "10" : T.surface,
+                      border: "1.5px solid " + (isSelected ? T.accent : T.border),
+                      borderRadius: 10, cursor: "pointer", textAlign: "left", width: "100%"
+                    }}>
+                      <span style={{ fontSize: 22 }}>{g.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{g.title}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{g.desc}</div>
+                      </div>
+                      {isSelected && <div style={{ width: 20, height: 20, borderRadius: 10, background: T.accent + "20", border: "2px solid " + T.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} /></div>}
+                      {!isSelected && <div style={{ width: 20, height: 20, borderRadius: 10, border: "2px solid " + T.border }} />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                <button onClick={function () { setStep(2); }} style={{ flex: 1, padding: 14, background: T.surface, border: "1px solid " + T.border, borderRadius: 10, color: T.textSec, fontSize: 14, cursor: "pointer" }}>← Back</button>
+                <button onClick={finish} disabled={saving} style={{ flex: 2, padding: 14, background: saving ? T.border : "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", border: "none", borderRadius: 10, color: saving ? T.textMuted : "#000", fontSize: 14, fontWeight: 700, cursor: saving ? "wait" : "pointer" }}>
+                  {saving ? "⏳ Setting up..." : "Complete Setup & Connect Data →"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Skip option */}
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          <span onClick={function () { onComplete({}); }} style={{ fontSize: 12, color: T.textMuted, cursor: "pointer" }}>Skip for now — I'll fill this in later</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Main App ── */
+export default function App() {
+  var allData = useMemo(generateData, []);
+  var _auth = useState(false); var authed = _auth[0], setAuthed = _auth[1];
+  var _profiled = useState(false); var profiled = _profiled[0], setProfiled = _profiled[1];
+  var _profile = useState(null); var profile = _profile[0], setProfile = _profile[1];
+  var _pg = useState("sources"); var page = _pg[0], setPage = _pg[1];
+  var _cn = useState(false); var connected = _cn[0], setConnected = _cn[1];
+  var _nt = useState(false); var notif = _nt[0], setNotif = _nt[1];
+  var _pr = useState("30"); var period = _pr[0], setPeriod = _pr[1];
+  var _vw = useState("overview"); var view = _vw[0], setView = _vw[1];
+  var _ga = useState(15000); var goalAmt = _ga[0], setGoalAmt = _ga[1];
+  var _ge = useState(false); var goalEdit = _ge[0], setGoalEdit = _ge[1];
+
+  function handleAuth(userData) {
+    setAuthed(true);
+    if (userData.isNew) {
+      setProfiled(false);
+    } else {
+      setProfiled(true);
+    }
+  }
+
+  function handleProfileComplete(profileData) {
+    setProfile(profileData);
+    setProfiled(true);
+  }
+
+  function handleConnect() {
+    setConnected(true);
+    setNotif(true);
+    setTimeout(function () { setNotif(false); setPage("dash"); }, 1500);
+  }
+
+  var p = parseInt(period);
+
+  var data = useMemo(function () {
+    var c = new Date(); c.setDate(c.getDate() - p);
+    return allData.filter(function (d) { return new Date(d.date) >= c; });
+  }, [allData, p]);
+
+  var prevData = useMemo(function () {
+    var c2 = new Date(); c2.setDate(c2.getDate() - p * 2);
+    var c1 = new Date(); c1.setDate(c1.getDate() - p);
+    return allData.filter(function (d) { var dt = new Date(d.date); return dt >= c2 && dt < c1; });
+  }, [allData, p]);
+
+  var unknowns = useMemo(function () { return analyzeUnknownFields(data); }, [data]);
+
+  var s = useMemo(function () {
+    var inc = data.filter(function (d) { return d.type === "Income"; });
+    var exp = data.filter(function (d) { return d.type === "Expense"; });
+    var tInc = inc.reduce(function (a, d) { return a + d.amount; }, 0);
+    var tExp = exp.reduce(function (a, d) { return a + d.amount; }, 0);
+    var tFee = data.reduce(function (a, d) { return a + d.fee; }, 0);
+    var pInc = prevData.filter(function (d) { return d.type === "Income"; }).reduce(function (a, d) { return a + d.amount; }, 0);
+    var pExp = prevData.filter(function (d) { return d.type === "Expense"; }).reduce(function (a, d) { return a + d.amount; }, 0);
+    var incGr = pInc > 0 ? ((tInc - pInc) / pInc * 100) : 0;
+    var expGr = pExp > 0 ? ((tExp - pExp) / pExp * 100) : 0;
+
+    var byCh = {};
+    inc.forEach(function (d) { byCh[d.channel] = (byCh[d.channel] || 0) + d.amount; });
+    var chArr = Object.entries(byCh).map(function (e) { return { name: e[0], value: e[1], color: CH_COL[e[0]] }; }).sort(function (a, b) { return b.value - a.value; });
+
+    var byDay = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+    inc.forEach(function (d) { byDay[d.day] += d.amount; });
+    var dayArr = Object.entries(byDay).map(function (e) { return { day: e[0], rev: e[1] }; });
+    var bestD = dayArr.reduce(function (a, b) { return a.rev > b.rev ? a : b; });
+
+    var hm = {};
+    inc.forEach(function (d) { var k = d.day + "-" + d.hour; hm[k] = (hm[k] || 0) + d.amount; });
+
+    var byDate = {};
+    allData.forEach(function (d) {
+      if (!byDate[d.date]) byDate[d.date] = { date: d.date, inc: 0, exp: 0 };
+      if (d.type === "Income") byDate[d.date].inc += d.amount; else byDate[d.date].exp += d.amount;
+    });
+    var daily = Object.values(byDate).sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+    var byCat = {};
+    exp.forEach(function (d) { byCat[d.category] = (byCat[d.category] || 0) + d.amount; });
+    var catArr = Object.entries(byCat).map(function (e) { return { name: e[0], value: e[1] }; }).sort(function (a, b) { return b.value - a.value; });
+
+    var debts = data.filter(function (d) { return d.debtor && !d.paid; });
+    var debtTot = debts.reduce(function (a, d) { return a + d.amount; }, 0);
+    var overdue = debts.filter(function (d) { return d.dueDate < "2025-03-07"; });
+    var paidD = data.filter(function (d) { return d.debtor && d.paid; });
+    var paidTot = paidD.reduce(function (a, d) { return a + d.amount; }, 0);
+
+    return { tInc: tInc, tExp: tExp, tFee: tFee, net: tInc - tExp, incGr: incGr, expGr: expGr, chArr: chArr, dayArr: dayArr, hm: hm, daily: daily, catArr: catArr, bestDay: bestD.day, bestDayRev: bestD.rev, txCount: data.length, debts: debts, debtTot: debtTot, debtCount: debts.length, overdue: overdue, overdueCount: overdue.length, paidD: paidD, paidTot: paidTot, pInc: pInc, pExp: pExp };
+  }, [data, prevData, allData]);
+
+  var fc = useMemo(function () { return computeForecast(s.daily); }, [s.daily]);
+  var goalPct = (s.tInc / goalAmt) * 100;
+
+  var navItems = [
+    { id: "overview", i: "📊", l: "Overview" },
+    { id: "forecast", i: "🔮", l: "Forecast" },
+    { id: "compare", i: "📈", l: "Compare" },
+    { id: "debts", i: "💳", l: "Debts" },
+    { id: "goals", i: "🎯", l: "Goals" },
+    { id: "discoveries", i: "✨", l: "Discoveries" },
+    { id: "reports", i: "📄", l: "Reports" },
+    { id: "chat", i: "🧠", l: "AI Chat" },
+  ];
+
+  // Auth & profile gates — AFTER all hooks
+  if (!authed) {
+    return <AuthScreen onAuth={handleAuth} />;
+  }
+  if (!profiled) {
+    return <ProfileSetup onComplete={handleProfileComplete} />;
+  }
+
+  return (
+    <div style={{ background: T.bg, minHeight: "100vh", color: T.text, fontFamily: "'Segoe UI', -apple-system, sans-serif" }}>
+      <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}*{box-sizing:border-box}`}</style>
+
+      {notif && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 100, padding: "12px 24px", background: T.accent, color: "#000", borderRadius: 10, fontWeight: 600, fontSize: 14 }}>✓ Data cleaned & connected!</div>}
+
+      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 24px", borderBottom: "1px solid " + T.border, background: T.surface, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg," + T.accent + "," + T.accentDim + ")", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "#000" }}>₵</div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>BizCashFlow</div>
+            <div style={{ fontSize: 10, color: T.textMuted }}>Smart analytics for Ghanaian SMEs</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+          <button onClick={function () { setPage("sources"); }} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid " + (page === "sources" ? T.accent : "transparent"), background: page === "sources" ? T.accentGlow : "transparent", color: page === "sources" ? T.accent : T.textMuted, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 12 }}>🔌</span>Sources
+          </button>
+          {connected && navItems.map(function (n) {
+            var isActive = page === "dash" && view === n.id;
+            return (
+              <button key={n.id} onClick={function () { setPage("dash"); setView(n.id); }} style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid " + (isActive ? T.accent : "transparent"), background: isActive ? T.accentGlow : "transparent", color: isActive ? T.accent : T.textMuted, cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 12 }}>{n.i}</span>{n.l}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto", animation: "fadeIn 0.3s" }}>
+        {page === "sources" && <DataSources onConnect={handleConnect} />}
+
+        {page === "dash" && !connected && (
+          <div style={{ textAlign: "center", padding: 80 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+            <h2 style={{ margin: "0 0 8px" }}>No data connected</h2>
+            <button onClick={function () { setPage("sources"); }} style={{ padding: "12px 28px", background: T.accent, border: "none", borderRadius: 8, color: "#000", fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 12 }}>Connect Data</button>
+          </div>
+        )}
+
+        {page === "dash" && connected && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16, gap: 4 }}>
+              {["7", "30", "60", "90"].map(function (pp) {
+                return <Pill key={pp} active={period === pp} onClick={function () { setPeriod(pp); }} color={T.blue}>{pp}d</Pill>;
+              })}
+            </div>
+
+            {/* OVERVIEW */}
+            {view === "overview" && (
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+                  <KPICard icon="📈" label="Income" value={fmtK(s.tInc)} color={T.accent} sub={(s.incGr > 0 ? "+" : "") + s.incGr.toFixed(1) + "%"} trend={s.incGr} />
+                  <KPICard icon="📉" label="Expenses" value={fmtK(s.tExp)} color={T.danger} sub={(s.expGr > 0 ? "+" : "") + s.expGr.toFixed(1) + "%"} trend={-s.expGr} />
+                  <KPICard icon="💰" label="Net" value={fmtK(s.net)} color={s.net >= 0 ? T.accent : T.danger} sub={s.net >= 0 ? "Positive" : "Negative"} trend={s.net >= 0 ? 1 : -1} />
+                  <KPICard icon="🎯" label="Goal" value={Math.min(goalPct, 100).toFixed(0) + "%"} color={goalPct >= 100 ? T.accent : T.warn} sub={fmtK(s.tInc) + " of " + fmtK(goalAmt)} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 18, gridColumn: "1 / -1" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, color: T.textSec }}>Daily Revenue vs Expenses</span>
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <span style={{ fontSize: 11, color: T.accent }}>● Income</span>
+                        <span style={{ fontSize: 11, color: T.danger }}>● Expenses</span>
+                      </div>
+                    </div>
+                    <div style={{ height: 120, display: "flex", alignItems: "flex-end", gap: 1 }}>
+                      {s.daily.slice(-p).map(function (d, i) {
+                        var mx = Math.max.apply(null, s.daily.slice(-p).map(function (x) { return Math.max(x.inc, x.exp); }));
+                        if (mx === 0) mx = 1;
+                        return (
+                          <div key={i} style={{ flex: 1, display: "flex", gap: 1, height: "100%", alignItems: "flex-end" }}>
+                            <div style={{ flex: 1, height: (d.inc / mx * 90) + "%", background: T.accent, borderRadius: "2px 2px 0 0", opacity: 0.6, minHeight: 1 }} />
+                            <div style={{ flex: 1, height: (d.exp / mx * 90) + "%", background: T.danger, borderRadius: "2px 2px 0 0", opacity: 0.4, minHeight: 1 }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 18 }}>
+                    <span style={{ fontSize: 13, color: T.textSec }}>Income by Channel</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "center", marginTop: 12 }}>
+                      <MiniDonut segments={s.chArr} />
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {s.chArr.slice(0, 5).map(function (c) {
+                          return (
+                            <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: 2, background: c.color }} />
+                              <span style={{ color: T.textMuted, width: 85 }}>{c.name}</span>
+                              <span style={{ color: T.text, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>{fmtK(c.value)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 18 }}>
+                    <span style={{ fontSize: 13, color: T.textSec }}>Peak Hours</span>
+                    <div style={{ marginTop: 12 }}><Heatmap data={s.hm} /></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* FORECAST */}
+            {view === "forecast" && (
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+                  <KPICard icon="📅" label="7-Day Income" value={fmtK(fc.slice(0, 7).reduce(function (a, d) { return a + d.projInc; }, 0))} color={T.blue} />
+                  <KPICard icon="📅" label="7-Day Expenses" value={fmtK(fc.slice(0, 7).reduce(function (a, d) { return a + d.projExp; }, 0))} color={T.warn} />
+                  <KPICard icon="💰" label="14-Day Net" value={fmtK(fc.length ? fc[fc.length - 1].projected : 0)} color={fc.length && fc[fc.length - 1].projected >= 0 ? T.accent : T.danger} />
+                </div>
+                <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20, marginBottom: 14 }}>
+                  <span style={{ fontSize: 13, color: T.textSec }}>14-Day Projection</span>
+                  <div style={{ height: 150, display: "flex", alignItems: "flex-end", gap: 4, marginTop: 14 }}>
+                    {fc.map(function (d, i) {
+                      var mx = Math.max.apply(null, fc.map(function (f) { return Math.abs(f.projected); }));
+                      if (mx === 0) mx = 1;
+                      return (
+                        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end" }}>
+                          <div style={{ fontSize: 8, color: T.textMuted, marginBottom: 2 }}>{fmtK(d.projected)}</div>
+                          <div style={{ width: "70%", height: (Math.abs(d.projected) / mx * 80) + "%", background: d.projected >= 0 ? T.blue + "50" : T.danger + "50", borderRadius: "3px 3px 0 0", minHeight: 2 }} />
+                          <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>{d.day}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ padding: "12px 16px", background: fc.some(function (f) { return f.projected < 500; }) ? T.dangerGlow : T.accentGlow, borderRadius: 10, fontSize: 12, color: fc.some(function (f) { return f.projected < 500; }) ? T.danger : T.accent }}>
+                  {fc.some(function (f) { return f.projected < 500; }) ? "🚨 Balance drops below ₵500 soon. Collect debts." : "✅ Cash flow healthy for 14 days."}
+                </div>
+              </div>
+            )}
+
+            {/* COMPARE */}
+            {view === "compare" && (
+              <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 18 }}>
+                <div style={{ fontSize: 13, color: T.textSec, marginBottom: 14 }}>Current {period}d vs Previous {period}d</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                  {[
+                    { l: "Income", c: s.tInc, pp: s.pInc, cl: T.accent },
+                    { l: "Expenses", c: s.tExp, pp: s.pExp, cl: T.danger },
+                    { l: "Net", c: s.net, pp: s.pInc - s.pExp, cl: T.blue },
+                    { l: "Fees", c: s.tFee, pp: prevData.reduce(function (a, d) { return a + d.fee; }, 0), cl: T.warn },
+                  ].map(function (m) {
+                    var ch = m.pp > 0 ? ((m.c - m.pp) / m.pp * 100) : 0;
+                    var good = (m.l === "Expenses" || m.l === "Fees") ? ch < 0 : ch > 0;
+                    return (
+                      <div key={m.l} style={{ background: T.surface, borderRadius: 10, padding: 14, textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase", marginBottom: 8 }}>{m.l}</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: m.cl, fontFamily: "'JetBrains Mono', monospace" }}>{fmtK(m.c)}</div>
+                        <div style={{ fontSize: 11, color: T.textMuted, margin: "4px 0" }}>was {fmtK(m.pp)}</div>
+                        <div style={{ display: "inline-block", padding: "3px 10px", borderRadius: 10, background: good ? T.accent + "15" : T.danger + "15", color: good ? T.accent : T.danger, fontSize: 12, fontWeight: 600 }}>
+                          {ch > 0 ? "+" : ""}{ch.toFixed(1)}%
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* DEBTS */}
+            {view === "debts" && (
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+                  <KPICard icon="💳" label="Outstanding" value={fmtK(s.debtTot)} color={T.warn} sub={s.debtCount + " owed"} />
+                  <KPICard icon="🔴" label="Overdue" value={fmtK(s.overdue.reduce(function (a, d) { return a + d.amount; }, 0))} color={T.danger} sub={s.overdueCount + " overdue"} trend={-1} />
+                  <KPICard icon="✅" label="Collected" value={fmtK(s.paidTot)} color={T.accent} trend={1} />
+                  <KPICard icon="📊" label="Rate" value={(s.paidD.length ? ((s.paidTot / (s.paidTot + s.debtTot)) * 100).toFixed(0) : 0) + "%"} color={T.blue} />
+                </div>
+                <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+                    <span style={{ fontSize: 13, color: T.textSec }}>Outstanding Debts</span>
+                    <span style={{ fontSize: 11, color: T.accent, cursor: "pointer" }}>Send all reminders →</span>
+                  </div>
+                  {(function () {
+                    var g = {};
+                    s.debts.forEach(function (d) {
+                      if (!g[d.debtor]) g[d.debtor] = { n: d.debtor, t: 0, items: [], old: d.dueDate };
+                      g[d.debtor].t += d.amount;
+                      g[d.debtor].items.push(d);
+                      if (d.dueDate < g[d.debtor].old) g[d.debtor].old = d.dueDate;
+                    });
+                    return Object.values(g).sort(function (a, b) { return b.t - a.t; }).map(function (db, i) {
+                      var ov = db.old < "2025-03-07";
+                      var days = ov ? Math.floor((new Date("2025-03-07") - new Date(db.old)) / 86400000) : 0;
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: ov ? T.danger + "08" : T.surface, border: "1px solid " + (ov ? T.danger + "25" : T.border), borderRadius: 10, marginBottom: 6 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 18, background: ov ? T.danger + "20" : T.warn + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{db.n[0]}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{db.n}</div>
+                            <div style={{ fontSize: 11, color: ov ? T.danger : T.textMuted }}>{db.items.length} tx • {db.old}{ov ? " • " + days + "d overdue" : ""}</div>
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: ov ? T.danger : T.warn, fontFamily: "'JetBrains Mono', monospace" }}>{fmt(db.t)}</div>
+                          <button style={{ padding: "6px 12px", background: T.accent + "15", border: "1px solid " + T.accent + "30", borderRadius: 8, color: T.accent, fontSize: 10, cursor: "pointer" }}>📱 Remind</button>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* GOALS */}
+            {view === "goals" && (
+              <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>Monthly Revenue Goal</div>
+                    <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>Track progress</div>
+                  </div>
+                  <button onClick={function () { setGoalEdit(!goalEdit); }} style={{ padding: "6px 14px", background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.textSec, fontSize: 11, cursor: "pointer" }}>{goalEdit ? "Close" : "Edit"}</button>
+                </div>
+                {goalEdit && (
+                  <div style={{ marginBottom: 20, display: "flex", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: T.textMuted }}>Target:</span>
+                    <input type="number" value={goalAmt} onChange={function (e) { setGoalAmt(+e.target.value || 0); }}
+                      style={{ padding: 8, background: T.surface, border: "1px solid " + T.border, borderRadius: 8, color: T.text, fontSize: 14, fontFamily: "'JetBrains Mono', monospace", width: 140, outline: "none" }} />
+                    <span style={{ fontSize: 12, color: T.textMuted }}>GHS</span>
+                  </div>
+                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                  <ProgressRing pct={goalPct} size={120} color={goalPct >= 100 ? T.accent : goalPct >= 70 ? T.warn : T.danger} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                      {[
+                        { l: "Earned", v: fmtK(s.tInc), c: T.accent },
+                        { l: "Target", v: fmtK(goalAmt), c: T.textSec },
+                        { l: "Left", v: goalAmt - s.tInc > 0 ? fmtK(goalAmt - s.tInc) : "Done!", c: goalAmt - s.tInc > 0 ? T.warn : T.accent },
+                      ].map(function (x) {
+                        return (
+                          <div key={x.l}>
+                            <div style={{ fontSize: 10, color: T.textMuted, textTransform: "uppercase" }}>{x.l}</div>
+                            <div style={{ fontSize: 22, fontWeight: 700, color: x.c, fontFamily: "'JetBrains Mono', monospace" }}>{x.v}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: 14, height: 10, background: T.surface, borderRadius: 5, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: Math.min(goalPct, 100) + "%", background: goalPct >= 100 ? T.accent : T.warn, borderRadius: 5, transition: "width 0.8s" }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* DISCOVERIES */}
+            {view === "discoveries" && (
+              <div>
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 28 }}>✨</span>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: 20 }}>Auto-Discovered Insights</h2>
+                      <p style={{ margin: "4px 0 0", fontSize: 13, color: T.textMuted }}><strong style={{ color: T.purple }}>{unknowns.length} fields</strong> auto-analyzed.</p>
+                    </div>
+                  </div>
+                  <div style={{ padding: "10px 14px", background: T.purple + "10", border: "1px solid " + T.purple + "25", borderRadius: 10, fontSize: 12, color: T.purple }}>
+                    🧠 Any new column in your data appears here automatically with revenue correlations.
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {unknowns.map(function (a) { return <DiscoveryCard key={a.field} data={a} />; })}
+                </div>
+              </div>
+            )}
+
+            {/* REPORTS */}
+            {view === "reports" && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 18 }}>💬</span>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>WhatsApp Daily Summary</span>
+                  </div>
+                  <div style={{ background: "#0B4A2E", borderRadius: 12, padding: 16 }}>
+                    <div style={{ background: "#025C3B", borderRadius: 10, padding: 14, fontSize: 12, color: "#E8F5E9", lineHeight: 1.7 }}>
+                      {"☀️ "}<strong>Good morning!</strong><br /><br />
+                      {"📈 Income: "}<strong>{fmt(s.tInc / p)}</strong><br />
+                      {"📉 Expenses: "}<strong>{fmt(s.tExp / p)}</strong><br />
+                      {"💰 Net: "}<strong style={{ color: "#69F0AE" }}>{fmt((s.tInc - s.tExp) / p)}</strong><br /><br />
+                      {"🎯 Goal: "}<strong>{Math.min(goalPct, 100).toFixed(0)}%</strong><br /><br />
+                      {"💡 "}<em>{s.bestDay} is your best day!</em>
+                    </div>
+                  </div>
+                  <button style={{ marginTop: 12, padding: 10, background: "#25D366", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", width: "100%" }}>📱 Enable WhatsApp Summaries</button>
+                </div>
+                <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <span style={{ fontSize: 18 }}>📄</span>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>Monthly Report</span>
+                  </div>
+                  <div style={{ background: "#fff", borderRadius: 10, padding: 18, color: "#1a1a1a" }}>
+                    <div style={{ textAlign: "center", borderBottom: "2px solid #00A862", paddingBottom: 10, marginBottom: 12 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#00A862" }}>BizCashFlow</div>
+                      <div style={{ fontSize: 11, color: "#666" }}>March 2025</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11 }}>
+                      <div>Income: <strong>{fmt(s.tInc)}</strong></div>
+                      <div>Expenses: <strong>{fmt(s.tExp)}</strong></div>
+                      <div>Net: <strong style={{ color: s.net >= 0 ? "#00A862" : "#E53935" }}>{fmt(s.net)}</strong></div>
+                      <div>Debts: <strong style={{ color: "#E65100" }}>{fmt(s.debtTot)}</strong></div>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                    <button style={{ padding: 10, background: T.blue + "15", border: "1px solid " + T.blue + "30", borderRadius: 8, color: T.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>📥 PDF</button>
+                    <button style={{ padding: 10, background: "#25D36615", border: "1px solid #25D36630", borderRadius: 8, color: "#25D366", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>📱 WhatsApp</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI CHAT */}
+            {view === "chat" && <AIChat stats={s} />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
